@@ -49,6 +49,17 @@
     "message": "title가 비어 있습니다."
   },
   {
+    "ruleId": "problem.learning-answer",
+    "mutation": {
+      "type": "set",
+      "category": "responsive",
+      "problem": 1,
+      "path": ["learning", "example", "code"],
+      "value": ".shell {\n  width: min(calc(100% - 32px), 1120px);\n  margin-inline: auto;\n}"
+    },
+    "message": "learning.example.code이(가) 기준 답안을 그대로 노출합니다."
+  },
+  {
     "ruleId": "problem.selector",
     "mutation": {
       "type": "set",
