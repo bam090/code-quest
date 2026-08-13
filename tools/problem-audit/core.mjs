@@ -224,9 +224,29 @@ function selectorExampleRevealsAnswer(answer, example) {
   return answerPattern.test(normalizedExample)
 }
 
-function htmlLearningStringRevealsAnswer(answer, value) {
-  const normalizedAnswer = normalized(answer)
+function learningStringRevealsAnswer(problem, value) {
+  if (problem.mode === 'selector') {
+    return selectorExampleRevealsAnswer(problem.answer, value)
+  }
+  const normalizedAnswer = normalized(problem.answer)
   return normalizedAnswer.length > 0 && normalized(value).includes(normalizedAnswer)
+}
+
+function inspectLearningValues(value, path, { onField, onString }) {
+  if (typeof value === 'string') {
+    onString?.(path, value)
+    return
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) =>
+      inspectLearningValues(item, `${path}[${index}]`, { onField, onString }))
+    return
+  }
+  if (!value || typeof value !== 'object') return
+  for (const [field, child] of Object.entries(value)) {
+    onField?.(path, field)
+    inspectLearningValues(child, `${path}.${field}`, { onField, onString })
+  }
 }
 
 function validateSelectorHintSafety(problem, location, fail) {
@@ -316,38 +336,18 @@ function validateLearning(learning, problem, location, fail) {
     'solution',
     'validationJson'
   ])
-  const publicStrings = []
-  const inspectPublicValue = (value, path) => {
-    if (typeof value === 'string') {
-      publicStrings.push({ path, value })
-      return
-    }
-    if (Array.isArray(value)) {
-      value.forEach((item, index) => inspectPublicValue(item, `${path}[${index}]`))
-      return
-    }
-    if (!value || typeof value !== 'object') return
-    for (const [field, child] of Object.entries(value)) {
+  inspectLearningValues(learning, 'learning', {
+    onField(path, field) {
       if (forbiddenFields.has(field)) {
         fail(location, `공개 ${path}에는 금지 필드 ${field}를 포함할 수 없습니다.`)
       }
-      inspectPublicValue(child, `${path}.${field}`)
+    },
+    onString(path, value) {
+      if (/data-target/i.test(value)) {
+        fail(location, `${path}에 내부 채점 표식 data-target을 포함할 수 없습니다.`)
+      }
     }
-  }
-  inspectPublicValue(learning, 'learning')
-  for (const { path, value } of publicStrings) {
-    if (/data-target/i.test(value)) {
-      fail(location, `${path}에 내부 채점 표식 data-target을 포함할 수 없습니다.`)
-    }
-    if (problem.mode === 'selector'
-        && selectorExampleRevealsAnswer(problem.answer, value)) {
-      fail(location, `${path}이(가) 기준 선택자를 그대로 노출합니다.`)
-    }
-    if (problem.mode === 'html'
-        && htmlLearningStringRevealsAnswer(problem.answer, value)) {
-      fail(location, `${path}이(가) HTML 기준 답안을 그대로 노출합니다.`)
-    }
-  }
+  })
 
   const validateTextArray = (field, minimum, maximum) => {
     const values = learning[field]
@@ -388,6 +388,24 @@ function validateLearning(learning, problem, location, fail) {
       }
     }
   }
+}
+
+function validateLearningAnswerSafety(problem, location, fail) {
+  if (!problem.learning || typeof problem.learning !== 'object'
+      || Array.isArray(problem.learning)) return
+
+  inspectLearningValues(problem.learning, 'learning', {
+    onString(path, value) {
+      if (!learningStringRevealsAnswer(problem, value)) return
+      if (problem.mode === 'selector') {
+        fail(location, `${path}이(가) 기준 선택자를 그대로 노출합니다.`)
+      } else if (problem.mode === 'html') {
+        fail(location, `${path}이(가) HTML 기준 답안을 그대로 노출합니다.`)
+      } else {
+        fail(location, `${path}이(가) 기준 답안을 그대로 노출합니다.`)
+      }
+    }
+  })
 }
 
 function validateBaseProblem(problem, category, expectedId, duplicateIndex, fail) {
@@ -990,6 +1008,11 @@ const problemBaseRule = defineProblemAuditRule('problem.base', ({ entries, fail 
     validateBaseProblem(problem, category, expectedId, duplicateIndex, fail))
 })
 
+const learningAnswerRule = defineProblemAuditRule('problem.learning-answer', ({ entries, fail }) => {
+  forEachProblem(entries, (problem, category) =>
+    validateLearningAnswerSafety(problem, `${category}#${problem.id ?? '?'}`, fail))
+})
+
 const selectorRule = defineProblemAuditRule('problem.selector', ({ entries, fail }) => {
   forEachProblem(entries, (problem, category) => validateSelectorProblem(problem, category, fail))
 })
@@ -1016,6 +1039,7 @@ export const problemAuditRules = Object.freeze([
   catalogLearningRule,
   catalogCategoriesRule,
   problemBaseRule,
+  learningAnswerRule,
   selectorRule,
   declarationRule,
   stylesheetRule,
