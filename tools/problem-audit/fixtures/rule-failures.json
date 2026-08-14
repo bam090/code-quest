@@ -60,6 +60,17 @@
     "message": "learning.example.code이(가) 기준 답안을 그대로 노출합니다."
   },
   {
+    "ruleId": "problem.hint-answer",
+    "mutation": {
+      "type": "set",
+      "category": "javascript",
+      "problem": 1,
+      "path": ["hints", 0],
+      "value": "function solve(unitPrice, quantity, deliveryFee) {\n  const subtotal = unitPrice * quantity;\n  const total = subtotal + deliveryFee;\n  return total;\n}"
+    },
+    "message": "1번째 힌트가 기준 답안을 그대로 노출합니다."
+  },
+  {
     "ruleId": "problem.selector",
     "mutation": {
       "type": "set",
