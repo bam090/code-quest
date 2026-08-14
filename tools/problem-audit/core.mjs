@@ -224,12 +224,21 @@ function selectorExampleRevealsAnswer(answer, example) {
   return answerPattern.test(normalizedExample)
 }
 
-function learningStringRevealsAnswer(problem, value) {
+function stringRevealsAnswer(problem, value) {
   if (problem.mode === 'selector') {
     return selectorExampleRevealsAnswer(problem.answer, value)
   }
   const normalizedAnswer = normalized(problem.answer)
   return normalizedAnswer.length > 0 && normalized(value).includes(normalizedAnswer)
+}
+
+function hintStringRevealsAnswer(problem, value) {
+  if (problem.mode !== 'declaration') {
+    return stringRevealsAnswer(problem, value)
+  }
+  const answerSnippet = normalized(problem.answer).replace(/[;{}]/g, '')
+  return answerSnippet.length >= 5
+    && normalized(value).replace(/[;{}]/g, '').includes(answerSnippet)
 }
 
 function inspectLearningValues(value, path, { onField, onString }) {
@@ -249,23 +258,9 @@ function inspectLearningValues(value, path, { onField, onString }) {
   }
 }
 
-function validateSelectorHintSafety(problem, location, fail) {
-  for (const hint of problem.hints) {
-    if (selectorExampleRevealsAnswer(problem.answer, hint)) {
-      fail(location, '힌트가 기준 선택자를 그대로 노출합니다. 다른 요소와 값의 유사 예시를 사용하세요.')
-    }
-  }
-}
-
 function validateDeclarationMetadata(problem, location, fail) {
   if (Object.hasOwn(problem, 'accept')) {
     fail(location, '사용되지 않는 accept 필드는 declaration 문제 계약에 포함할 수 없습니다.')
-  }
-
-  const answerSnippet = normalized(problem.answer).replace(/[;{}]/g, '')
-  if (answerSnippet.length >= 5 && problem.hints.some(hint =>
-    normalized(hint).replace(/[;{}]/g, '').includes(answerSnippet))) {
-    fail(location, '힌트가 기준 답안 선언을 그대로 노출합니다. 다른 값의 유사 예시를 사용하세요.')
   }
 
   const declarations = declarationMap(problem.answer)
@@ -396,7 +391,7 @@ function validateLearningAnswerSafety(problem, location, fail) {
 
   inspectLearningValues(problem.learning, 'learning', {
     onString(path, value) {
-      if (!learningStringRevealsAnswer(problem, value)) return
+      if (!stringRevealsAnswer(problem, value)) return
       if (problem.mode === 'selector') {
         fail(location, `${path}이(가) 기준 선택자를 그대로 노출합니다.`)
       } else if (problem.mode === 'html') {
@@ -406,6 +401,21 @@ function validateLearningAnswerSafety(problem, location, fail) {
       }
     }
   })
+}
+
+function validateHintAnswerSafety(problem, location, fail) {
+  if (!Array.isArray(problem.hints)) return
+
+  for (const [index, hint] of problem.hints.entries()) {
+    if (!hintStringRevealsAnswer(problem, hint)) continue
+    if (problem.mode === 'selector') {
+      fail(location, '힌트가 기준 선택자를 그대로 노출합니다. 다른 요소와 값의 유사 예시를 사용하세요.')
+    } else if (problem.mode === 'declaration') {
+      fail(location, '힌트가 기준 답안 선언을 그대로 노출합니다. 다른 값의 유사 예시를 사용하세요.')
+    } else {
+      fail(location, `${index + 1}번째 힌트가 기준 답안을 그대로 노출합니다.`)
+    }
+  }
 }
 
 function validateBaseProblem(problem, category, expectedId, duplicateIndex, fail) {
@@ -442,7 +452,6 @@ function validateBaseProblem(problem, category, expectedId, duplicateIndex, fail
 function validateSelectorProblem(problem, category, fail) {
   const location = `${category}#${problem.id ?? '?'}`
   if (problem.mode === 'selector') {
-    validateSelectorHintSafety(problem, location, fail)
     if (!nonBlank(problem.html) || !problem.html.includes('data-target')) {
       fail(location, '선택자 문제 HTML에는 data-target 정답 대상이 필요합니다.')
     }
@@ -1013,6 +1022,11 @@ const learningAnswerRule = defineProblemAuditRule('problem.learning-answer', ({ 
     validateLearningAnswerSafety(problem, `${category}#${problem.id ?? '?'}`, fail))
 })
 
+const hintAnswerRule = defineProblemAuditRule('problem.hint-answer', ({ entries, fail }) => {
+  forEachProblem(entries, (problem, category) =>
+    validateHintAnswerSafety(problem, `${category}#${problem.id ?? '?'}`, fail))
+})
+
 const selectorRule = defineProblemAuditRule('problem.selector', ({ entries, fail }) => {
   forEachProblem(entries, (problem, category) => validateSelectorProblem(problem, category, fail))
 })
@@ -1040,6 +1054,7 @@ export const problemAuditRules = Object.freeze([
   catalogCategoriesRule,
   problemBaseRule,
   learningAnswerRule,
+  hintAnswerRule,
   selectorRule,
   declarationRule,
   stylesheetRule,
