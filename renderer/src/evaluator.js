@@ -764,6 +764,28 @@ async function activateScenario(page, scenario, viewport) {
   }
 }
 
+function assertStylesheetRenderLimits({ elementCount, documentWidth, documentHeight }) {
+  if (elementCount > MAX_STYLESHEET_ELEMENTS) {
+    throw new RenderLimitError(
+      `stylesheet 채점 요소 수가 허용값 ${MAX_STYLESHEET_ELEMENTS}개를 초과했습니다.`
+    )
+  }
+  if (documentWidth > MAX_RENDER_WIDTH || documentHeight > MAX_RENDER_HEIGHT) {
+    throw new RenderLimitError(
+      `렌더링 결과가 허용 크기 ${MAX_RENDER_WIDTH}x${MAX_RENDER_HEIGHT}px를 초과했습니다.`
+    )
+  }
+}
+
+async function validateStylesheetRenderLimits(page) {
+  const limits = await page.evaluate(() => ({
+    elementCount: 2 + document.body.querySelectorAll('*').length,
+    documentWidth: document.documentElement.scrollWidth,
+    documentHeight: document.documentElement.scrollHeight
+  }))
+  assertStylesheetRenderLimits(limits)
+}
+
 async function stylesheetSnapshot(page) {
   const snapshot = await page.evaluate(() => {
     const elements = [
@@ -802,16 +824,7 @@ async function stylesheetSnapshot(page) {
     }
   })
 
-  if (snapshot.elementCount > MAX_STYLESHEET_ELEMENTS) {
-    throw new RenderLimitError(
-      `stylesheet 채점 요소 수가 허용값 ${MAX_STYLESHEET_ELEMENTS}개를 초과했습니다.`
-    )
-  }
-  if (snapshot.documentWidth > MAX_RENDER_WIDTH || snapshot.documentHeight > MAX_RENDER_HEIGHT) {
-    throw new RenderLimitError(
-      `렌더링 결과가 허용 크기 ${MAX_RENDER_WIDTH}x${MAX_RENDER_HEIGHT}px를 초과했습니다.`
-    )
-  }
+  assertStylesheetRenderLimits(snapshot)
   return snapshot
 }
 
@@ -1120,8 +1133,11 @@ export class CssEvaluator {
             if (!expectedActive) {
               throw new Error(`기준 답안에서 ${scenario.state} 시나리오를 적용할 수 없습니다.`)
             }
+            if (identicalStylesheets) {
+              await validateStylesheetRenderLimits(page)
+              continue
+            }
             const expected = await stylesheetSnapshot(page)
-            if (identicalStylesheets) continue
 
             await setStylesheetDocument(page, html, actualCss)
             const actualActive = await activateScenario(page, scenario, viewport)
