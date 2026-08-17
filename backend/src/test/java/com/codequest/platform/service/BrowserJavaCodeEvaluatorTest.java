@@ -28,7 +28,7 @@ class BrowserJavaCodeEvaluatorTest {
     void keepsBackendTimeoutAboveTheRunnerPhaseBudget() {
         assertThat(BrowserJavaCodeEvaluator.RUNNER_REQUEST_TIMEOUT)
                 .isEqualTo(Duration.ofSeconds(20))
-                .isGreaterThan(Duration.ofSeconds(14));
+                .isGreaterThan(Duration.ofSeconds(16));
     }
 
     @Test void buildsHarnessWithoutExposingReferenceSolution() throws Exception {
