@@ -22,7 +22,7 @@ public final class JavaRunnerServerTest {
                 + JavaRunnerServer.NATIVE_MEMORY_HEADROOM_MIB;
         check(boundedMemory <= JavaRunnerServer.CONTAINER_MEMORY_MIB,
                 "서버·자식 JVM·native headroom 예산이 컨테이너 메모리를 초과합니다.");
-        check(JavaRunnerServer.evaluationPhaseBudget().toSeconds() == 14,
+        check(JavaRunnerServer.evaluationPhaseBudget().toSeconds() == 16,
                 "backend timeout의 기준이 되는 채점 단계 예산이 달라졌습니다.");
     }
 

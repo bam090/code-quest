@@ -35,7 +35,7 @@ public final class JavaRunnerServer {
     static final int NATIVE_MEMORY_HEADROOM_MIB = 72;
     static final int MAX_CONCURRENT_EVALUATIONS = 1;
     private static final Duration COMPILE_TIMEOUT = Duration.ofSeconds(5);
-    private static final Duration SOURCE_CONTRACT_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration SOURCE_CONTRACT_TIMEOUT = Duration.ofSeconds(4);
     private static final Duration RUN_TIMEOUT = Duration.ofSeconds(2);
     private static final String HELPER_CLASSPATH =
             Path.of("").toAbsolutePath().normalize().toString();
