@@ -315,6 +315,18 @@ test('동일한 stylesheet도 상태 selector 검증을 우회하지 않는다',
   )
 })
 
+test('동일한 stylesheet도 요소 수 제한을 검사한다', async () => {
+  await assert.rejects(
+    evaluator.evaluate({
+      mode: 'stylesheet',
+      html: `<section>${'<span>항목</span>'.repeat(499)}</section>`,
+      expectedCss: 'span { color: red; }',
+      actualCss: 'span { color: red; }'
+    }),
+    /요소 수가 허용값/
+  )
+})
+
 test('동일한 stylesheet도 모든 viewport의 렌더링 크기 제한을 검사한다', async () => {
   await assert.rejects(
     evaluator.evaluate({
@@ -337,6 +349,50 @@ test('동일한 stylesheet도 모든 viewport의 렌더링 크기 제한을 검�
     }),
     /렌더링 결과가 허용 크기/
   )
+})
+
+test('동일한 stylesheet의 3개 viewport와 hover·focus를 제한 시간 안에 검증한다', async () => {
+  const html = `
+    <section class="catalog-grid">
+      ${Array.from({ length: 4 }, (_, index) => `
+        <article class="catalog-card">
+          <div class="catalog-media" aria-hidden="true"></div>
+          <h3>항목 ${index + 1}</h3>
+          <p>설명</p>
+          <a href="#item-${index + 1}">자세히</a>
+        </article>
+      `).join('')}
+    </section>
+  `
+  const css = `
+    .catalog-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .catalog-card { padding: 12px; }
+    .catalog-media { aspect-ratio: 4 / 3; }
+    .catalog-card:hover { transform: translateY(-2px); }
+    .catalog-card a:focus-visible { outline: 2px solid currentColor; }
+    @media (max-width: 900px) { .catalog-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px) { .catalog-grid { grid-template-columns: 1fr; } }
+  `
+
+  const result = await evaluator.evaluate({
+    mode: 'stylesheet',
+    html,
+    expectedCss: css,
+    actualCss: css,
+    validation: {
+      viewports: [
+        { width: 1200, height: 800 },
+        { width: 760, height: 800 },
+        { width: 390, height: 780 }
+      ],
+      hover: ['.catalog-card:first-child'],
+      focus: ['.catalog-card:first-child a']
+    }
+  })
+
+  assert.equal(result.syntaxValid, true)
+  assert.equal(result.matched, true)
+  assert.equal(result.diagnosticCode, 'NONE')
 })
 
 test('전체 stylesheet의 viewport는 body 기본 여백 없이 화면 전체를 기준으로 계산한다', async () => {
